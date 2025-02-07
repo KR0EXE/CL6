@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget
 from PyQt5.QtCore import Qt, QTimer, QPointF
 from PyQt5.QtGui import QPainter, QColor, QIcon
 
-# If running on Windows, import ctypes for native window manipulation.
+# Import ctypes for Windows-specific window style modifications.
 if sys.platform.startswith("win"):
     import ctypes
 
@@ -16,40 +16,52 @@ class OverlayWindow(QWidget):
         
     def initUI(self):
         self.setWindowTitle("Screen Augmentation Overlay")
-        # Remove the Qt.Tool flag so that the window appears in the taskbar.
+        # Remove the Qt.Tool flag so the window shows in the taskbar.
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        # Set the custom icon (appears on the taskbar and window lists).
+        # Set the custom icon.
         self.setWindowIcon(QIcon("unique_icon.png"))
         # Enable per-pixel transparency.
         self.setAttribute(Qt.WA_TranslucentBackground)
-        # Make the window ignore mouse events at the Qt level.
+        # Let Qt ignore mouse events (for click‑through at the Qt level).
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        # (Optional) Do not use the system background.
+        self.setAttribute(Qt.WA_NoSystemBackground)
         
         # Resize to cover the entire screen.
         self.setGeometry(QDesktopWidget().screenGeometry())
         
-        # Show the window first so that a valid window ID is available.
+        # Show the window so that we have a valid window handle.
         self.show()
         
-        # Windows-specific hack: Set extended window styles to allow click-through.
+        # Windows-specific hack: Use native APIs to mark the window as click-through.
         if sys.platform.startswith("win"):
             hwnd = self.winId().__int__()
-            WS_EX_LAYERED = 0x00080000
-            WS_EX_TRANSPARENT = 0x00000020
             GWL_EXSTYLE = -20
-            # Retrieve current extended style.
-            current_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            # Add WS_EX_LAYERED and WS_EX_TRANSPARENT so that the window is click-through.
-            new_style = current_style | WS_EX_LAYERED | WS_EX_TRANSPARENT
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
+            WS_EX_LAYERED    = 0x00080000
+            WS_EX_TRANSPARENT = 0x00000020
+            WS_EX_NOACTIVATE = 0x08000000
+            # Attempt to use GetWindowLongPtrW / SetWindowLongPtrW for 64-bit compatibility.
+            try:
+                get_ex_style = ctypes.windll.user32.GetWindowLongPtrW
+                set_ex_style = ctypes.windll.user32.SetWindowLongPtrW
+            except AttributeError:
+                # Fallback to the 32-bit versions.
+                get_ex_style = ctypes.windll.user32.GetWindowLongW
+                set_ex_style = ctypes.windll.user32.SetWindowLongW
+
+            # Get current extended style.
+            style = get_ex_style(hwnd, GWL_EXSTYLE)
+            # Combine in the layered, transparent, and no-activate flags.
+            new_style = style | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE
+            set_ex_style(hwnd, GWL_EXSTYLE, new_style)
         
-        # Start a timer to update the particle animation.
+        # Start the timer to update the particle animation.
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateParticles)
-        self.timer.start(30)  # Approximately 33 frames per second.
+        self.timer.start(30)  # Roughly 33 frames per second.
     
     def initParticles(self):
-        # Initialize a list of particles with random positions, velocities, sizes, and colors.
+        # Initialize a list of particles with random attributes.
         self.particles = []
         for _ in range(100):
             x = random.uniform(0, self.width())
@@ -86,15 +98,14 @@ class OverlayWindow(QWidget):
             
             particle['pos'] = QPointF(pos.x() + vel.x(), pos.y() + vel.y())
         
-        # Trigger a repaint.
-        self.update()
+        self.update()  # Trigger repaint.
     
     def paintEvent(self, event):
-        # Repaint the widget.
+        # Draw the overlay with a trailing effect.
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Draw a semi-transparent black rectangle over the window to create a trailing effect.
+        # Draw a semi-transparent black rectangle to create a fade-out effect.
         painter.fillRect(self.rect(), QColor(0, 0, 0, 10))
         
         # Draw each particle.
@@ -107,7 +118,7 @@ class OverlayWindow(QWidget):
 
 def main():
     app = QApplication(sys.argv)
-    # Set the application icon (for the taskbar).
+    # Set the application icon so it appears on the taskbar.
     app.setWindowIcon(QIcon("unique_icon.png"))
     overlay = OverlayWindow()
     sys.exit(app.exec_())
