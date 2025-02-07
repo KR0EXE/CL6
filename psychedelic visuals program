@@ -4,18 +4,16 @@ import random
 import time
 import pyautogui
 
-# Auto-detect screen resolution for fullscreen mode
+# ✅ Get the actual screen size dynamically
 screen_width, screen_height = pyautogui.size()
 
-# Timer variables for rare face appearance
+# Timer for rare face appearances
 last_face_time = 0
 FACE_COOLDOWN = 180  # At most once every 3 minutes (180 seconds)
 
-# Function to generate a random color
 def random_color():
     return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-# Function to create a random shape
 def draw_random_shape(canvas):
     shape_type = random.choice(["circle", "rectangle", "polygon", "lines", "gradient", "wave"])
     
@@ -39,7 +37,7 @@ def draw_random_shape(canvas):
             [random.randint(0, screen_width), random.randint(0, screen_height)] for _ in range(num_points)
         ], np.int32)
 
-        # Ensure the shape of `points` is correct
+        # Ensure correct shape for OpenCV
         points = points.reshape((-1, 1, 2))
 
         color = random_color()
@@ -69,7 +67,6 @@ def draw_random_shape(canvas):
             y = int(screen_height / 2 + amplitude * np.sin(frequency * x))
             cv2.circle(canvas, (x, y), 5, color, -1)
 
-# Function to generate an AI face and overlay it on the visuals
 def generate_face_overlay():
     face_size = random.randint(80, 200)  # Random face size
     face = np.zeros((face_size, face_size, 3), dtype=np.uint8)
@@ -84,7 +81,6 @@ def generate_face_overlay():
 
     return face
 
-# Function to overlay a face onto the visuals with transparency
 def overlay_face(canvas, face, x, y, alpha=0.5):
     h, w, _ = face.shape
 
@@ -103,12 +99,11 @@ def overlay_face(canvas, face, x, y, alpha=0.5):
                 blended_pixel = cv2.addWeighted(canvas_pixel, 1 - alpha, face_pixel, alpha, 0)
                 canvas[y + i, x + j] = blended_pixel.astype(np.uint8)
 
-# Function to generate continuously evolving trippy visuals with rare faces
 def generate_visuals():
     global last_face_time
     canvas = np.zeros((screen_height, screen_width, 3), dtype=np.uint8)  # Black canvas
 
-    # Create a fullscreen window
+    # ✅ Create a proper fullscreen window
     cv2.namedWindow("Trippy AI Geometric Visuals", cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty("Trippy AI Geometric Visuals", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
@@ -142,5 +137,5 @@ def generate_visuals():
 
     cv2.destroyAllWindows()
 
-# Run the visualization
+# ✅ Run the visualization
 generate_visuals()
