@@ -4,7 +4,7 @@ import random
 import time
 import pyautogui
 
-# ✅ Get the actual screen size dynamically
+# Get screen resolution dynamically
 screen_width, screen_height = pyautogui.size()
 
 # Timer for rare face appearances
@@ -32,19 +32,19 @@ def draw_random_shape(canvas):
         cv2.rectangle(canvas, pt1, pt2, color, thickness)
     
     elif shape_type == "polygon":
-        num_points = random.randint(3, 10)
+        num_points = random.randint(3, 10)  # At least 3 points
         points = np.array([
             [random.randint(0, screen_width), random.randint(0, screen_height)] for _ in range(num_points)
         ], np.int32)
 
-        # Ensure correct shape for OpenCV
-        points = points.reshape((-1, 1, 2))
-
-        color = random_color()
-        thickness = random.choice([-1, 2])
-        cv2.polylines(canvas, [points], isClosed=True, color=color, thickness=thickness)
-        if thickness == -1:
-            cv2.fillPoly(canvas, [points], color)
+        # Fix: Ensure points array is correctly shaped and not empty
+        if points.shape[0] >= 3:  # Ensure at least a triangle
+            points = points.reshape((-1, 1, 2))
+            color = random_color()
+            thickness = random.choice([-1, 2])
+            cv2.polylines(canvas, [points], isClosed=True, color=color, thickness=thickness)
+            if thickness == -1:
+                cv2.fillPoly(canvas, [points], color)
     
     elif shape_type == "lines":
         for _ in range(random.randint(5, 20)):
@@ -67,68 +67,27 @@ def draw_random_shape(canvas):
             y = int(screen_height / 2 + amplitude * np.sin(frequency * x))
             cv2.circle(canvas, (x, y), 5, color, -1)
 
-def generate_face_overlay():
-    face_size = random.randint(80, 200)  # Random face size
-    face = np.zeros((face_size, face_size, 3), dtype=np.uint8)
-
-    # Generate a fake AI face using random pixels
-    for y in range(face_size):
-        for x in range(face_size):
-            face[y, x] = random_color()
-
-    # Apply a blur for an eerie effect
-    face = cv2.GaussianBlur(face, (11, 11), 5)
-
-    return face
-
-def overlay_face(canvas, face, x, y, alpha=0.5):
-    h, w, _ = face.shape
-
-    # Ensure face placement is within bounds
-    x = min(max(0, x), screen_width - w)
-    y = min(max(0, y), screen_height - h)
-
-    # Blend face onto the canvas
-    for i in range(h):
-        for j in range(w):
-            if x + j < screen_width and y + i < screen_height:
-                canvas_pixel = canvas[y + i, x + j].astype(np.float32)
-                face_pixel = face[i, j].astype(np.float32)
-
-                # Blend pixels correctly
-                blended_pixel = cv2.addWeighted(canvas_pixel, 1 - alpha, face_pixel, alpha, 0)
-                canvas[y + i, x + j] = blended_pixel.astype(np.uint8)
-
 def generate_visuals():
     global last_face_time
     canvas = np.zeros((screen_height, screen_width, 3), dtype=np.uint8)  # Black canvas
 
-    # ✅ Create a proper fullscreen window
+    # Fullscreen window
     cv2.namedWindow("Trippy AI Geometric Visuals", cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty("Trippy AI Geometric Visuals", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
     while True:
-        # Apply some blurring for a smoother effect
+        # Apply blur for smooth visuals
         canvas = cv2.GaussianBlur(canvas, (5, 5), 0)
-        
-        # Randomly add shapes
+
+        # Draw random shapes
         draw_random_shape(canvas)
-        
-        # Introduce transparency effect
+
+        # Transparency effect
         overlay = canvas.copy()
         alpha = 0.2  # Transparency level
         cv2.addWeighted(overlay, alpha, canvas, 1 - alpha, 0, canvas)
 
-        # Rarely add a face overlay (max once every 3 minutes)
-        current_time = time.time()
-        if current_time - last_face_time > FACE_COOLDOWN and random.random() < 0.01:
-            last_face_time = current_time
-            face = generate_face_overlay()
-            x, y = random.randint(0, screen_width - face.shape[1]), random.randint(0, screen_height - face.shape[0])
-            overlay_face(canvas, face, x, y, alpha=0.7)
-            print("👁️ AI Face Appeared!")
-
-        # Display the visuals
+        # Display visuals
         cv2.imshow("Trippy AI Geometric Visuals", canvas)
 
         # Exit on 'q' key press
@@ -137,5 +96,5 @@ def generate_visuals():
 
     cv2.destroyAllWindows()
 
-# ✅ Run the visualization
+# Run the visualization
 generate_visuals()
