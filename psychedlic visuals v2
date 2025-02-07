@@ -1,0 +1,131 @@
+import pygame
+from pygame.locals import DOUBLEBUF, OPENGL, FULLSCREEN
+import moderngl
+import numpy as np
+import time
+import math
+import random
+
+# Initialize pygame and create a fullscreen window.
+pygame.init()
+display_info = pygame.display.Info()
+width, height = display_info.current_w, display_info.current_h
+pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL | FULLSCREEN)
+pygame.display.set_caption("High-End Evolving Psychedelic Visuals")
+
+# Create a ModernGL context from the pygame OpenGL context.
+ctx = moderngl.create_context(require=330)
+
+# Define a full-screen quad (two triangles covering the entire screen).
+vertices = np.array([
+    -1.0, -1.0,
+     1.0, -1.0,
+    -1.0,  1.0,
+    -1.0,  1.0,
+     1.0, -1.0,
+     1.0,  1.0,
+], dtype='f4')
+
+vbo = ctx.buffer(vertices.tobytes())
+
+# Generate random parameters to ensure unique patterns and styles each run
+seed = random.uniform(0.1, 10.0)
+speed_factor = random.uniform(0.5, 2.0)
+pattern_variation = random.uniform(1.0, 5.0)
+style_factor = random.uniform(0.5, 3.0)
+color_shift = random.uniform(0.5, 2.0)
+distortion_factor = random.uniform(0.5, 3.0)
+wave_factor = random.uniform(0.2, 1.5)
+zoom_factor = random.uniform(0.5, 3.0)
+rotation_speed = random.uniform(0.1, 1.0)
+dynamic_shift = random.uniform(0.3, 1.7)
+layer_intensity = random.uniform(0.4, 2.5)
+
+# Vertex shader
+vertex_shader = """
+#version 330
+in vec2 in_position;
+out vec2 v_texcoord;
+void main() {
+    v_texcoord = in_position * 0.5 + 0.5;
+    gl_Position = vec4(in_position, 0.0, 1.0);
+}
+"""
+
+# Fragment shader
+fragment_shader = f"""
+#version 330
+uniform float time;
+uniform vec2 resolution;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+vec3 palette(float t) {{
+    return 0.5 + 0.5 * sin(6.2831 * (vec3(0.0, 0.33, 0.67) + t * {color_shift}));
+}}
+
+float noise(vec2 uv) {{
+    return fract(sin(dot(uv.xy, vec2(12.9898, 78.233))) * 43758.5453);
+}}
+
+float fractalPattern(vec2 uv, float time) {{
+    uv += vec2(sin(time * {distortion_factor}) * 0.1, cos(time * {distortion_factor}) * 0.1);
+    uv *= {zoom_factor};
+    uv = mat2(cos(time * {rotation_speed}), -sin(time * {rotation_speed}), sin(time * {rotation_speed}), cos(time * {rotation_speed})) * uv;
+    float pattern = noise(uv * {seed * 10.0}) * sin(time * {speed_factor});
+    pattern += sin(uv.x * {seed * 20.0} + uv.y * {seed * 15.0} + time * {speed_factor * 0.8});
+    pattern += cos(uv.x * {seed * 30.0} - uv.y * {seed * 25.0} + time * {speed_factor * 1.2});
+    pattern += sin(length(uv) * {seed * 40.0} - time * {speed_factor * 2.0}) * 0.5;
+    pattern += sin(atan(uv.y, uv.x) * {seed * 50.0} + time * {speed_factor * 1.3}) * 0.4;
+    pattern *= mix(1.0, sin(time * {style_factor}), 0.5);
+    pattern += sin(uv.x * {seed * 60.0} + time * {speed_factor * 1.5}) * cos(uv.y * {seed * 60.0} + time * {speed_factor * 1.7});
+    pattern += sin(uv.x * {wave_factor} + sin(time * {dynamic_shift}) * 5.0) * cos(uv.y * {wave_factor} + cos(time * {layer_intensity}) * 5.0);
+    return pattern * 0.3 + 0.5;
+}}
+
+void main() {{
+    vec2 uv = gl_FragCoord.xy / resolution;
+    uv = uv * 2.0 - 1.0;
+    uv.x *= resolution.x / resolution.y;
+    float colorValue = fractalPattern(uv, time);
+    vec3 color = palette(colorValue);
+    color *= 0.8 + 0.2 * sin(time * {pattern_variation} + uv.x * 10.0) * cos(time * {pattern_variation * 0.75} + uv.y * 10.0);
+    fragColor = vec4(color, 1.0);
+}}
+"""
+
+# Compile shaders
+prog = ctx.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
+
+# Create a vertex array object with explicit attribute binding
+vao = ctx.vertex_array(prog, [(vbo, '2f', 'in_position')])
+
+# Set the resolution uniform
+prog['resolution'].value = (width, height)
+
+# Start time tracking
+start_time = time.time()
+
+# Main loop
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_q, pygame.K_ESCAPE):
+                running = False
+
+    # Update time uniform
+    current_time = time.time() - start_time
+    prog['time'].value = current_time
+
+    # Clear screen and render quad
+    ctx.clear(0.0, 0.0, 0.0, 1.0)
+    vao.render()
+
+    # Swap buffers
+    pygame.display.flip()
+    pygame.time.wait(10)
+
+pygame.quit()
