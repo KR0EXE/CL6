@@ -1,0 +1,185 @@
+import pygame
+from pygame.locals import DOUBLEBUF, OPENGL, FULLSCREEN
+import moderngl
+import numpy as np
+import time
+import math
+
+# Initialize pygame and create a fullscreen window.
+pygame.init()
+display_info = pygame.display.Info()
+width, height = display_info.current_w, display_info.current_h
+pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL | FULLSCREEN)
+pygame.display.set_caption("High-End Evolving Psychedelic Visuals")
+
+# Create a ModernGL context from the pygame OpenGL context.
+ctx = moderngl.create_context()
+
+# Define a full-screen quad (two triangles covering the entire screen).
+vertices = np.array([
+    -1.0, -1.0,
+     1.0, -1.0,
+    -1.0,  1.0,
+    -1.0,  1.0,
+     1.0, -1.0,
+     1.0,  1.0,
+], dtype='f4')
+vbo = ctx.buffer(vertices.tobytes())
+
+# Vertex shader: passes through vertex positions and computes texture coordinates.
+vertex_shader = """
+#version 330
+in vec2 in_position;
+out vec2 v_texcoord;
+void main() {
+    // Map from [-1, 1] to [0, 1] for texture coordinates.
+    v_texcoord = in_position * 0.5 + 0.5;
+    gl_Position = vec4(in_position, 0.0, 1.0);
+}
+"""
+
+# Fragment shader: renders multiple evolving, psychedelic patterns.
+#
+# The shader defines several functions:
+#   - fractalPattern: Mandelbrot-like fractal iteration.
+#   - spiralPattern: A spiral pattern based on polar coordinates.
+#   - kaleidoPattern: A kaleidoscopic pattern using mirrored coordinates.
+#   - wavePattern: A sine-based wave pattern.
+#   - gridPattern: A smooth grid pattern.
+#   - plasmaPattern: A plasma-like effect.
+#   - ripplePattern: A ripple effect based on distance from the center.
+#
+# These patterns are blended using time-varying blend factors and additional
+# dynamic rotation, zoom, and offset transformations.
+fragment_shader = """
+#version 330
+uniform float time;
+uniform vec2 resolution;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+vec3 palette(float t) {
+    return 0.5 + 0.5 * sin(6.2831 * (vec3(0.0, 0.33, 0.67) + t));
+}
+
+float fractalPattern(vec2 uv) {
+    vec2 z = vec2(0.0);
+    int iterations;
+    const int maxIterations = 150;
+    for (iterations = 0; iterations < maxIterations; iterations++) {
+         if (dot(z, z) > 4.0) break;
+         z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + uv;
+    }
+    return float(iterations) / float(maxIterations);
+}
+
+float spiralPattern(vec2 uv) {
+    float r = length(uv);
+    float theta = atan(uv.y, uv.x);
+    return 0.5 + 0.5 * sin(10.0 * theta + time + r * 10.0);
+}
+
+float kaleidoPattern(vec2 uv) {
+    uv = abs(uv);
+    return 0.5 + 0.5 * sin((uv.x + uv.y) * 20.0 + time);
+}
+
+float wavePattern(vec2 uv) {
+    return 0.5 + 0.5 * sin(15.0 * uv.x + time) * sin(15.0 * uv.y + time);
+}
+
+float gridPattern(vec2 uv) {
+    vec2 gv = fract(uv * 10.0);
+    return smoothstep(0.0, 0.1, gv.x) + smoothstep(0.0, 0.1, gv.y);
+}
+
+float plasmaPattern(vec2 uv) {
+    return 0.5 + 0.5 * sin(10.0 * (uv.x + uv.y) + time);
+}
+
+float ripplePattern(vec2 uv) {
+    float r = length(uv);
+    return 0.5 + 0.5 * sin(20.0 * r - time * 5.0);
+}
+
+void main() {
+    // Normalize fragment coordinates to [-1, 1]
+    vec2 uv = gl_FragCoord.xy / resolution;
+    uv = uv * 2.0 - 1.0;
+    uv.x *= resolution.x / resolution.y;
+    
+    // Apply dynamic rotation and zoom.
+    float angle = time * 0.1;
+    float zoom = 1.0 + 0.5 * sin(time * 0.3);
+    mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+    uv = rot * uv * zoom;
+    
+    // Compute all pattern functions.
+    float p1 = fractalPattern(uv);
+    float p2 = spiralPattern(uv);
+    float p3 = kaleidoPattern(uv);
+    float p4 = wavePattern(uv);
+    float p5 = gridPattern(uv);
+    float p6 = plasmaPattern(uv);
+    float p7 = ripplePattern(uv);
+    
+    // Time-varying blend factors.
+    float b1 = 0.5 + 0.5 * sin(time * 0.3);
+    float b2 = 0.5 + 0.5 * cos(time * 0.2);
+    float b3 = 0.5 + 0.5 * sin(time * 0.1);
+    
+    // Blend the patterns in several steps.
+    float mix1 = mix(p1, p2, b1);
+    float mix2 = mix(mix1, p3, b2);
+    float mix3 = mix(mix2, p4, b3);
+    float mix4 = mix(mix3, p5, b1);
+    float mix5 = mix(mix4, p6, b2);
+    float pattern = mix(mix5, p7, b3);
+    
+    // Determine the final color.
+    vec3 color = palette(pattern + time * 0.1);
+    // Additional modulation for extra psychedelic effect.
+    color *= 0.8 + 0.2 * sin(10.0 * uv.x + time) * cos(10.0 * uv.y + time);
+    
+    fragColor = vec4(color, 1.0);
+}
+"""
+
+# Compile the shader program.
+prog = ctx.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
+
+# Create a vertex array object.
+vao = ctx.simple_vertex_array(prog, vbo, 'in_position')
+
+# Set the resolution uniform.
+prog['resolution'].value = (width, height)
+
+# Record the start time.
+start_time = time.time()
+
+# Main loop.
+running = True
+while running:
+    # Process events.
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_q, pygame.K_ESCAPE):
+                running = False
+
+    # Update the time uniform.
+    current_time = time.time() - start_time
+    prog['time'].value = current_time
+
+    # Clear the screen and render the full-screen quad.
+    ctx.clear(0.0, 0.0, 0.0, 1.0)
+    vao.render()
+
+    # Swap the buffers.
+    pygame.display.flip()
+
+    # Cap the frame rate.
+    pygame.time.wait(10)
+
+pygame.quit()
