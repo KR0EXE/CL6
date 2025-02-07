@@ -2,7 +2,7 @@ import sys
 import random
 from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget
 from PyQt5.QtCore import Qt, QTimer, QPointF
-from PyQt5.QtGui import QPainter, QColor
+from PyQt5.QtGui import QPainter, QColor, QIcon
 
 class OverlayWindow(QWidget):
     def __init__(self):
@@ -11,16 +11,14 @@ class OverlayWindow(QWidget):
         self.initParticles()
         
     def initUI(self):
-        # Set up a frameless, full-screen window that stays on top.
         self.setWindowTitle("Screen Augmentation Overlay")
-        self.setWindowFlags(
-            Qt.FramelessWindowHint | 
-            Qt.WindowStaysOnTopHint | 
-            Qt.Tool  # This prevents the window from showing in the taskbar.
-        )
+        # Removed Qt.Tool so that the window appears in the taskbar and Alt-Tab list.
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # Set a custom icon that will appear on the desktop and taskbar.
+        self.setWindowIcon(QIcon("unique_icon.png"))
         # Enable per-pixel transparency.
         self.setAttribute(Qt.WA_TranslucentBackground)
-        # Make the window ignore mouse events (click-through).
+        # Make the window ignore mouse events so that you can interact with the desktop below.
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         
         # Resize to cover the entire screen.
@@ -29,12 +27,12 @@ class OverlayWindow(QWidget):
         # Start a timer to update the animation.
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateParticles)
-        self.timer.start(30)  # Update roughly every 30ms (~33 frames per second).
+        self.timer.start(30)  # Approximately 33 frames per second.
         
         self.show()
         
     def initParticles(self):
-        # Initialize a list of particles with random positions, velocities, sizes, and colors.
+        # Create a list of particles with random attributes.
         self.particles = []
         for _ in range(100):
             x = random.uniform(0, self.width())
@@ -42,12 +40,11 @@ class OverlayWindow(QWidget):
             dx = random.uniform(-2, 2)
             dy = random.uniform(-2, 2)
             radius = random.uniform(5, 15)
-            # Create a semi-transparent random color.
             color = QColor(
                 random.randint(0, 255),
                 random.randint(0, 255),
                 random.randint(0, 255),
-                random.randint(100, 200)
+                random.randint(100, 200)  # Semi-transparent.
             )
             particle = {
                 'pos': QPointF(x, y),
@@ -58,7 +55,7 @@ class OverlayWindow(QWidget):
             self.particles.append(particle)
     
     def updateParticles(self):
-        # Update each particle's position and bounce them off the screen edges.
+        # Update each particle's position and bounce off screen edges.
         for particle in self.particles:
             pos = particle['pos']
             vel = particle['vel']
@@ -72,16 +69,13 @@ class OverlayWindow(QWidget):
             
             particle['pos'] = QPointF(pos.x() + vel.x(), pos.y() + vel.y())
         
-        # Trigger a repaint.
-        self.update()
+        self.update()  # Trigger repaint.
     
     def paintEvent(self, event):
-        # This method is called every time the widget is repainted.
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Draw a semi-transparent black rectangle over the entire window.
-        # This creates a trailing (fade-out) effect for the moving particles.
+        # Draw a semi-transparent black rectangle to create a trailing effect.
         painter.fillRect(self.rect(), QColor(0, 0, 0, 10))
         
         # Draw each particle.
@@ -94,6 +88,8 @@ class OverlayWindow(QWidget):
 
 def main():
     app = QApplication(sys.argv)
+    # Set the application icon so it appears in the taskbar.
+    app.setWindowIcon(QIcon("unique_icon.png"))
     overlay = OverlayWindow()
     sys.exit(app.exec_())
 
