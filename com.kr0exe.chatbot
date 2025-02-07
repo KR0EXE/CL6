@@ -1,0 +1,96 @@
+package com.example.chatbot;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.StringTextComponent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientChatReceivedEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber.Bus;
+
+import java.util.LinkedList;
+import java.util.Queue;
+
+@Mod("chatbot")
+@EventBusSubscriber(modid = "chatbot", value = Dist.CLIENT, bus = Bus.FORGE)
+public class ChatBotMod {
+
+    // Name to show as the “other player.”
+    private static final String BOT_NAME = "ChatBot";
+
+    // Queue for delayed responses (stored as ticks).
+    private static final Queue<DelayedMessage> delayedMessages = new LinkedList<>();
+
+    public ChatBotMod() {
+        // Initialization code (if needed)
+    }
+
+    /**
+     * Listen for incoming chat messages. When a message is received that isn’t from the bot,
+     * schedule a bot response after a delay.
+     */
+    @SubscribeEvent
+    public static void onChatReceived(ClientChatReceivedEvent event) {
+        ITextComponent message = event.getMessage();
+        String msgText = message.getString();
+
+        // Ignore messages that already appear to come from the bot.
+        if (msgText.startsWith(BOT_NAME + ":")) {
+            return;
+        }
+
+        // For demonstration, schedule a response 3 seconds (≈60 ticks) later.
+        int delayTicks = 60;
+        String response = generateResponse(msgText);
+        delayedMessages.add(new DelayedMessage(delayTicks, response));
+    }
+
+    /**
+     * On each client tick, check if any delayed messages should now be sent.
+     */
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        // Process only at the end of the tick.
+        if (event.phase == TickEvent.Phase.END && !delayedMessages.isEmpty()) {
+            DelayedMessage dm = delayedMessages.peek();
+            dm.ticksLeft--;
+            if (dm.ticksLeft <= 0) {
+                // “Send” the bot’s message by printing it into the chat.
+                sendBotChat(dm.message);
+                delayedMessages.poll();
+            }
+        }
+    }
+
+    /**
+     * Posts a message to the client’s chat GUI, prefixed with the bot name.
+     */
+    private static void sendBotChat(String message) {
+        ITextComponent botMessage = new StringTextComponent(BOT_NAME + ": " + message);
+        Minecraft.getInstance().ingameGUI.getChatGUI().printChatMessage(botMessage);
+    }
+
+    /**
+     * Generates a response based on the incoming message.
+     * This is a simple example that echoes the input.
+     */
+    private static String generateResponse(String incoming) {
+        return "I heard you say: \"" + incoming + "\"";
+    }
+
+    /**
+     * A helper class representing a message scheduled to be sent after a delay (in ticks).
+     */
+    private static class DelayedMessage {
+        int ticksLeft;
+        String message;
+
+        DelayedMessage(int ticksLeft, String message) {
+            this.ticksLeft = ticksLeft;
+            this.message = message;
+        }
+    }
+}
