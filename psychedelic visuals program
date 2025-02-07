@@ -2,13 +2,10 @@ import cv2
 import numpy as np
 import random
 import time
+import pyautogui
 
-# Detect screen resolution for fullscreen mode
-screen_width = cv2.getWindowImageRect("")[2] if cv2.getWindowImageRect("") else 1920
-screen_height = cv2.getWindowImageRect("")[3] if cv2.getWindowImageRect("") else 1080
-
-# Load OpenCV's built-in AI-generated face dataset
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+# Auto-detect screen resolution for fullscreen mode
+screen_width, screen_height = pyautogui.size()
 
 # Timer variables for rare face appearance
 last_face_time = 0
@@ -42,7 +39,7 @@ def draw_random_shape(canvas):
             [random.randint(0, screen_width), random.randint(0, screen_height)] for _ in range(num_points)
         ], np.int32)
 
-        # Fix: Ensure the shape of `points` is correct
+        # Ensure the shape of `points` is correct
         points = points.reshape((-1, 1, 2))
 
         color = random_color()
@@ -91,22 +88,22 @@ def generate_face_overlay():
 def overlay_face(canvas, face, x, y, alpha=0.5):
     h, w, _ = face.shape
 
-    # Fix: Ensure face placement is within bounds
+    # Ensure face placement is within bounds
     x = min(max(0, x), screen_width - w)
     y = min(max(0, y), screen_height - h)
 
-    # Create a mask with alpha transparency
+    # Blend face onto the canvas
     for i in range(h):
         for j in range(w):
             if x + j < screen_width and y + i < screen_height:
                 canvas_pixel = canvas[y + i, x + j].astype(np.float32)
                 face_pixel = face[i, j].astype(np.float32)
 
-                # Fix: Ensure the correct shape for `addWeighted`
+                # Blend pixels correctly
                 blended_pixel = cv2.addWeighted(canvas_pixel, 1 - alpha, face_pixel, alpha, 0)
                 canvas[y + i, x + j] = blended_pixel.astype(np.uint8)
 
-# Function to generate a continuously evolving trippy effect with rare faces
+# Function to generate continuously evolving trippy visuals with rare faces
 def generate_visuals():
     global last_face_time
     canvas = np.zeros((screen_height, screen_width, 3), dtype=np.uint8)  # Black canvas
@@ -114,7 +111,7 @@ def generate_visuals():
     # Create a fullscreen window
     cv2.namedWindow("Trippy AI Geometric Visuals", cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty("Trippy AI Geometric Visuals", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    
+
     while True:
         # Apply some blurring for a smoother effect
         canvas = cv2.GaussianBlur(canvas, (5, 5), 0)
