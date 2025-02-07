@@ -1,0 +1,101 @@
+import sys
+import random
+from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget
+from PyQt5.QtCore import Qt, QTimer, QPointF
+from PyQt5.QtGui import QPainter, QColor
+
+class OverlayWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.initParticles()
+        
+    def initUI(self):
+        # Set up a frameless, full-screen window that stays on top.
+        self.setWindowTitle("Screen Augmentation Overlay")
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | 
+            Qt.WindowStaysOnTopHint | 
+            Qt.Tool  # This prevents the window from showing in the taskbar.
+        )
+        # Enable per-pixel transparency.
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        # Make the window ignore mouse events (click-through).
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        
+        # Resize to cover the entire screen.
+        self.setGeometry(QDesktopWidget().screenGeometry())
+        
+        # Start a timer to update the animation.
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.updateParticles)
+        self.timer.start(30)  # Update roughly every 30ms (~33 frames per second).
+        
+        self.show()
+        
+    def initParticles(self):
+        # Initialize a list of particles with random positions, velocities, sizes, and colors.
+        self.particles = []
+        for _ in range(100):
+            x = random.uniform(0, self.width())
+            y = random.uniform(0, self.height())
+            dx = random.uniform(-2, 2)
+            dy = random.uniform(-2, 2)
+            radius = random.uniform(5, 15)
+            # Create a semi-transparent random color.
+            color = QColor(
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(100, 200)
+            )
+            particle = {
+                'pos': QPointF(x, y),
+                'vel': QPointF(dx, dy),
+                'radius': radius,
+                'color': color
+            }
+            self.particles.append(particle)
+    
+    def updateParticles(self):
+        # Update each particle's position and bounce them off the screen edges.
+        for particle in self.particles:
+            pos = particle['pos']
+            vel = particle['vel']
+            new_x = pos.x() + vel.x()
+            new_y = pos.y() + vel.y()
+            
+            if new_x < 0 or new_x > self.width():
+                vel.setX(-vel.x())
+            if new_y < 0 or new_y > self.height():
+                vel.setY(-vel.y())
+            
+            particle['pos'] = QPointF(pos.x() + vel.x(), pos.y() + vel.y())
+        
+        # Trigger a repaint.
+        self.update()
+    
+    def paintEvent(self, event):
+        # This method is called every time the widget is repainted.
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw a semi-transparent black rectangle over the entire window.
+        # This creates a trailing (fade-out) effect for the moving particles.
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 10))
+        
+        # Draw each particle.
+        for particle in self.particles:
+            painter.setBrush(particle['color'])
+            painter.setPen(Qt.NoPen)
+            pos = particle['pos']
+            radius = particle['radius']
+            painter.drawEllipse(pos, radius, radius)
+
+def main():
+    app = QApplication(sys.argv)
+    overlay = OverlayWindow()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
