@@ -1,0 +1,88 @@
+import json
+import os
+import tkinter as tk
+from tkinter import scrolledtext
+
+LOGIC_FILE = "generated_logic.py"
+LOG_FILE = "ai_raw_logs.json"
+COMMAND_LIBRARY = "command_library.json"
+
+# Function to parse and execute generated logic
+def execute_logic():
+    if not os.path.exists(LOGIC_FILE):
+        print("No logic file found. Run the AI learning tracker first.")
+        return
+
+    with open(LOGIC_FILE, "r") as f:
+        logic_code = f.read()
+    
+    exec(logic_code)
+    
+    # Call functions dynamically if they exist
+    for func in ["track_file_change", "process_started", "network_activity_detected", "system_usage", "system_info", "manage_files", "terminate_process", "adjust_system_settings", "simulate_user_input"]:
+        if func in globals():
+            globals()[func]()
+
+# Function to interpret logs and generate command explanations
+def interpret_logs():
+    if not os.path.exists(LOG_FILE):
+        print("No log file found. Run the AI learning tracker first.")
+        return
+    
+    command_library = {}
+    
+    with open(LOG_FILE, "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            event = json.loads(line)
+            if event["event"] == "file_modified":
+                command_library["track_file_change"] = "Tracks modifications to files and logs the changes. Useful for monitoring file integrity and detecting unauthorized changes."
+            elif event["event"] == "new_process":
+                command_library["process_started"] = "Monitors new processes, logs the command used and the user who initiated it. Helps track software usage and detect anomalies."
+            elif event["event"] == "network_activity":
+                command_library["network_activity_detected"] = "Logs network connections, tracking source and destination addresses. Helps monitor suspicious activity and ensure secure communications."
+            elif event["event"] == "system_resource":
+                command_library["system_usage"] = "Monitors CPU, memory, and disk usage over time. Helps optimize performance and detect system stress."
+            elif event["event"] == "file_management":
+                command_library["manage_files"] = "Allows moving, copying, and deleting files based on user-defined rules. Useful for automated file organization."
+            elif event["event"] == "terminate_process":
+                command_library["terminate_process"] = "Identifies and terminates processes based on criteria such as high CPU usage or unauthorized execution."
+            elif event["event"] == "adjust_system_settings":
+                command_library["adjust_system_settings"] = "Modifies system configurations such as power settings, network preferences, and performance optimizations based on observed user behavior."
+            elif event["event"] == "simulate_user_input":
+                command_library["simulate_user_input"] = "Executes actions such as keystrokes and mouse movements to automate repetitive tasks and user interactions."
+    
+    with open(COMMAND_LIBRARY, "w") as f:
+        json.dump(command_library, f, indent=4)
+    
+    print("Command library generated.")
+
+# Function to display the interface
+def show_interface():
+    if not os.path.exists(COMMAND_LIBRARY):
+        print("No command library found. Generate commands first.")
+        return
+    
+    with open(COMMAND_LIBRARY, "r") as f:
+        command_library = json.load(f)
+    
+    root = tk.Tk()
+    root.title("AI Command Library")
+    root.geometry("700x500")
+    
+    text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=80, height=25)
+    text_area.pack(padx=10, pady=10)
+    
+    for command, description in command_library.items():
+        text_area.insert(tk.END, f"Command: {command}\nDescription: {description}\n\n")
+    
+    text_area.config(state=tk.DISABLED)
+    root.mainloop()
+
+if __name__ == "__main__":
+    print("Executing generated logic...")
+    execute_logic()
+    print("Interpreting logs to generate command library...")
+    interpret_logs()
+    print("Displaying interface...")
+    show_interface()
