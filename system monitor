@@ -1,0 +1,185 @@
+import psutil
+import pygetwindow as gw
+import keyboard
+import mouse
+import os
+import json
+import time
+import threading
+import numpy as np
+import re
+import tensorflow as tf
+import torch
+import sqlite3
+import cv2
+import shutil
+import socket
+import subprocess
+import random
+import speech_recognition as sr
+import pyttsx3
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import deque, defaultdict
+from sklearn.cluster import KMeans
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QWidget, QLabel, QTableWidget, QTableWidgetItem, QTabWidget
+from PyQt5.QtCore import QTimer
+from win32api import GetSystemMetrics
+
+# === Database Management for Logs ===
+class DatabaseManager:
+    def __init__(self, db_name="system_data.db"):
+        self.conn = sqlite3.connect(db_name)
+        self.cursor = self.conn.cursor()
+        self.setup_tables()
+
+    def setup_tables(self):
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            event_type TEXT,
+            details TEXT
+        )
+        """)
+        self.conn.commit()
+
+    def insert_log(self, timestamp, event_type, details):
+        self.cursor.execute("INSERT INTO logs (timestamp, event_type, details) VALUES (?, ?, ?)", (timestamp, event_type, details))
+        self.conn.commit()
+
+    def fetch_logs(self):
+        self.cursor.execute("SELECT * FROM logs ORDER BY id DESC LIMIT 50")
+        return self.cursor.fetchall()
+
+# === AI Processor for Anomaly Detection & Automation ===
+class AIProcessor:
+    def __init__(self):
+        self.model = tf.keras.Sequential([
+            tf.keras.layers.LSTM(128, return_sequences=True, input_shape=(None, 1)),
+            tf.keras.layers.LSTM(64),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dense(1, activation='sigmoid')
+        ])
+        self.model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+    def train_model(self, data, labels):
+        self.model.fit(data, labels, epochs=10)
+
+    def predict_action(self, sequence):
+        return self.model.predict(sequence)
+
+# === System Monitor for Processes, Inputs, Network, and Storage ===
+class SystemMonitor:
+    def __init__(self):
+        self.process_log = deque(maxlen=10000)
+        self.input_log = deque(maxlen=10000)
+        self.window_log = deque(maxlen=10000)
+        self.running = False
+        self.lock = threading.Lock()
+        self.db = DatabaseManager()
+        self.ai_processor = AIProcessor()
+        self.engine = pyttsx3.init()
+
+    def speak(self, text):
+        self.engine.say(text)
+        self.engine.runAndWait()
+
+    def log_processes(self):
+        while self.running:
+            active_windows = gw.getAllTitles()
+            processes = {p.pid: p.info for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info'])}
+            with self.lock:
+                self.process_log.append({"time": time.time(), "windows": active_windows, "processes": processes})
+            self.db.insert_log(time.ctime(), "process", json.dumps(processes))
+            time.sleep(1)
+
+    def log_keyboard(self, event):
+        with self.lock:
+            self.input_log.append({"time": time.time(), "type": "keyboard", "key": event.name})
+        self.db.insert_log(time.ctime(), "keyboard", event.name)
+
+    def detect_patterns(self):
+        sequence_data = [item['key'] for item in self.input_log if item['type'] == 'keyboard']
+        sequence_str = ' '.join(sequence_data)
+        found_patterns = re.findall(r'\b(\w+ \w+ \w+)\b', sequence_str)
+        for pattern in found_patterns:
+            self.patterns[pattern] += 1
+            if self.patterns[pattern] > 5:
+                self.speak(f"Detected frequent input pattern: {pattern}")
+
+    def start(self):
+        self.running = True
+        threading.Thread(target=self.log_processes, daemon=True).start()
+        keyboard.on_press(self.log_keyboard)
+
+    def stop(self):
+        self.running = False
+
+# === GUI for Monitoring and Automation Control ===
+class AutomationGUI(QMainWindow):
+    def __init__(self, monitor):
+        super().__init__()
+        self.monitor = monitor
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("AI-Powered System Monitor")
+        self.setGeometry(100, 100, 1000, 600)
+        self.tabs = QTabWidget()
+        
+        self.logTab = QWidget()
+        self.analyticsTab = QWidget()
+        self.voiceTab = QWidget()
+        
+        self.initLogTab()
+        self.initAnalyticsTab()
+        self.initVoiceTab()
+        
+        self.tabs.addTab(self.logTab, "System Logs")
+        self.tabs.addTab(self.analyticsTab, "Real-Time Analytics")
+        self.tabs.addTab(self.voiceTab, "Voice Automation")
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.tabs)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+    def initLogTab(self):
+        layout = QVBoxLayout()
+        self.logTable = QTableWidget()
+        self.logTable.setColumnCount(3)
+        self.logTable.setHorizontalHeaderLabels(["Timestamp", "Event Type", "Details"])
+        layout.addWidget(QLabel("System Logs:"))
+        layout.addWidget(self.logTable)
+        self.logTab.setLayout(layout)
+
+    def initAnalyticsTab(self):
+        layout = QVBoxLayout()
+        self.analyticsText = QTextEdit()
+        layout.addWidget(QLabel("Real-Time System Analytics:"))
+        layout.addWidget(self.analyticsText)
+        self.analyticsTab.setLayout(layout)
+
+    def initVoiceTab(self):
+        layout = QVBoxLayout()
+        self.voiceCommand = QTextEdit()
+        self.executeButton = QPushButton("Execute Voice Command")
+        self.executeButton.clicked.connect(self.executeVoiceCommand)
+        layout.addWidget(QLabel("Enter Automation Command:"))
+        layout.addWidget(self.voiceCommand)
+        layout.addWidget(self.executeButton)
+        self.voiceTab.setLayout(layout)
+
+    def executeVoiceCommand(self):
+        command = self.voiceCommand.toPlainText()
+        os.system(command)
+
+if __name__ == "__main__":
+    monitor = SystemMonitor()
+    monitor.start()
+    app = QApplication([])
+    gui = AutomationGUI(monitor)
+    gui.show()
+    app.exec_()
