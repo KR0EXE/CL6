@@ -1,0 +1,131 @@
+import os
+import psutil
+import json
+import shutil
+import time
+import socket
+import platform
+from pynput import keyboard, mouse
+from threading import Thread
+
+LOG_FILE = "ai_raw_logs.json"
+known_processes = set()
+log_data = []
+
+# Ensure log file exists
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w") as f:
+        json.dump([], f)
+
+# Function to log data
+def log_event(event):
+    global log_data
+    log_data.append(event)
+    with open(LOG_FILE, "a") as f:
+        json.dump(event, f, indent=4)
+        f.write("\n")
+
+# Function to track active processes
+def log_processes():
+    global known_processes
+    while True:
+        process_data = []
+        for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline', 'username', 'cpu_percent', 'memory_info']):
+            if process.info['pid'] not in known_processes:
+                known_processes.add(process.info['pid'])
+                process_data.append(process.info)
+                log_event({"event": "new_process", "data": process.info})
+        time.sleep(1)
+
+# Function to track keystrokes
+def on_press(key):
+    log_event({"event": "keypress", "key": str(key)})
+
+# Function to track mouse clicks
+def on_click(x, y, button, pressed):
+    if pressed:
+        log_event({"event": "mouse_click", "button": str(button), "position": (x, y)})
+
+# Function to track file modifications
+def monitor_files():
+    watched_folders = ["C:/Users/YourUser/Documents", "C:/Users/YourUser/Downloads", "C:/Users/YourUser/Desktop", "C:/Users/YourUser/AppData"]
+    file_log = {}
+    while True:
+        for folder in watched_folders:
+            if os.path.exists(folder):
+                for file in os.listdir(folder):
+                    file_path = os.path.join(folder, file)
+                    if os.path.isfile(file_path):
+                        last_modified = os.path.getmtime(file_path)
+                        if file not in file_log or file_log[file] != last_modified:
+                            file_log[file] = last_modified
+                            log_event({"event": "file_modified", "file": file_path})
+        time.sleep(1)
+
+# Function to track network activity
+def monitor_network():
+    while True:
+        connections = psutil.net_connections(kind='inet')
+        for conn in connections:
+            if conn.status == "ESTABLISHED":
+                log_event({"event": "network_activity", "local_address": conn.laddr, "remote_address": conn.raddr})
+        time.sleep(2)
+
+# Function to track system resource usage
+def monitor_resources():
+    while True:
+        cpu_usage = psutil.cpu_percent()
+        mem_usage = psutil.virtual_memory().percent
+        disk_usage = psutil.disk_usage('/').percent
+        log_event({"event": "system_resource", "cpu": cpu_usage, "memory": mem_usage, "disk": disk_usage})
+        time.sleep(5)
+
+# Function to track system information
+def log_system_info():
+    system_info = {
+        "os": platform.system(),
+        "os_version": platform.version(),
+        "hostname": socket.gethostname(),
+        "ip_address": socket.gethostbyname(socket.gethostname()),
+        "architecture": platform.architecture()
+    }
+    log_event({"event": "system_info", "data": system_info})
+
+# Function to convert raw logs into structured logic
+def generate_logic():
+    logic_code = ""
+    with open(LOG_FILE, "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            event = json.loads(line)
+            if event["event"] == "file_modified":
+                logic_code += f"def track_file_change():\n    print(\"File {event['file']} was modified\")\n\n"
+            elif event["event"] == "new_process":
+                logic_code += f"def process_started():\n    print(\"Process {event['data']['name']} started by {event['data'].get('username', 'unknown')} with command: {event['data'].get('cmdline', [])}\")\n\n"
+            elif event["event"] == "network_activity":
+                logic_code += f"def network_activity_detected():\n    print(\"Network connection established: {event['local_address']} -> {event['remote_address']}\")\n\n"
+            elif event["event"] == "system_resource":
+                logic_code += f"def system_usage():\n    print(\"CPU: {event['cpu']}% | Memory: {event['memory']}% | Disk: {event['disk']}%\")\n\n"
+            elif event["event"] == "system_info":
+                logic_code += f"def system_info():\n    print(\"OS: {event['data']['os']} {event['data']['os_version']} | Hostname: {event['data']['hostname']} | IP: {event['data']['ip_address']}\")\n\n"
+    with open("generated_logic.py", "w") as f:
+        f.write(logic_code)
+    print("Logic generated in generated_logic.py")
+
+# Start background threads
+Thread(target=log_processes, daemon=True).start()
+Thread(target=monitor_files, daemon=True).start()
+Thread(target=monitor_network, daemon=True).start()
+Thread(target=monitor_resources, daemon=True).start()
+Thread(target=log_system_info, daemon=True).start()
+
+# Start keyboard and mouse listeners
+keyboard_listener = keyboard.Listener(on_press=on_press)
+mouse_listener = mouse.Listener(on_click=on_click)
+keyboard_listener.start()
+mouse_listener.start()
+
+# Main loop to periodically generate logic
+while True:
+    time.sleep(5)  # Faster learning frequency
+    generate_logic()
