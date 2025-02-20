@@ -1,0 +1,101 @@
+import os
+import psutil
+import json
+import shutil
+import time
+from pynput import keyboard, mouse
+from threading import Thread
+
+# RAM Usage Limit (1% of available RAM)
+MAX_RAM_PERCENT = 1
+LOG_FILE = "ai_raw_logs.json"
+known_processes = set()
+log_data = []
+
+# Ensure log file exists
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w") as f:
+        json.dump([], f)
+
+# Function to enforce RAM limit
+def enforce_memory_limit():
+    while True:
+        mem = psutil.virtual_memory()
+        if mem.percent > MAX_RAM_PERCENT:
+            print("RAM limit exceeded. Exiting.")
+            os._exit(1)  # Force quit if over limit
+        time.sleep(5)
+
+# Function to log data
+def log_event(event):
+    global log_data
+    log_data.append(event)
+    with open(LOG_FILE, "a") as f:
+        json.dump(event, f, indent=4)
+        f.write("\n")
+
+# Function to track active processes
+def log_processes():
+    global known_processes
+    while True:
+        process_data = []
+        for process in psutil.process_iter(attrs=['pid', 'name']):
+            if process.info['pid'] not in known_processes:
+                known_processes.add(process.info['pid'])
+                process_data.append(process.info)
+                log_event({"event": "new_process", "data": process.info})
+        time.sleep(1)
+
+# Function to track keystrokes
+def on_press(key):
+    log_event({"event": "keypress", "key": str(key)})
+
+# Function to track mouse clicks
+def on_click(x, y, button, pressed):
+    if pressed:
+        log_event({"event": "mouse_click", "button": str(button), "position": (x, y)})
+
+# Function to track file modifications
+def monitor_files():
+    watched_folder = "C:/Users/YourUser/Documents"
+    file_log = {}
+    while True:
+        for file in os.listdir(watched_folder):
+            file_path = os.path.join(watched_folder, file)
+            if os.path.isfile(file_path):
+                last_modified = os.path.getmtime(file_path)
+                if file not in file_log or file_log[file] != last_modified:
+                    file_log[file] = last_modified
+                    log_event({"event": "file_modified", "file": file_path})
+        time.sleep(5)
+
+# Function to convert raw logs into structured logic
+def generate_logic():
+    logic_code = ""
+    with open(LOG_FILE, "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            event = json.loads(line)
+            if event["event"] == "file_modified":
+                logic_code += f"def track_file_change():\n    print(\"File {event['file']} was modified\")\n\n"
+            elif event["event"] == "new_process":
+                logic_code += f"def process_started():\n    print(\"Process {event['data']['name']} started\")\n\n"
+    with open("generated_logic.py", "w") as f:
+        f.write(logic_code)
+    print("Logic generated in generated_logic.py")
+
+# Start background threads
+Thread(target=log_processes, daemon=True).start()
+Thread(target=monitor_files, daemon=True).start()
+Thread(target=enforce_memory_limit, daemon=True).start()
+
+# Start keyboard and mouse listeners
+keyboard_listener = keyboard.Listener(on_press=on_press)
+mouse_listener = mouse.Listener(on_click=on_click)
+keyboard_listener.start()
+mouse_listener.start()
+
+# Main loop to periodically generate logic
+while True:
+    time.sleep(30)  # Adjust based on learning frequency
+    generate_logic()
