@@ -1,0 +1,69 @@
+import json
+import os
+import tkinter as tk
+from tkinter import scrolledtext, Listbox, Button, Entry
+
+COMMAND_LIBRARY = "command_library.json"
+
+# Function to execute a command
+def execute_command(command):
+    print(f"Executing: {command}")
+    os.system(command)  # Execute system-level command
+
+# Function to load and display command library
+def show_interface():
+    if not os.path.exists(COMMAND_LIBRARY):
+        print("No command library found. Generate commands first.")
+        return
+    
+    with open(COMMAND_LIBRARY, "r") as f:
+        command_library = json.load(f)
+    
+    root = tk.Tk()
+    root.title("AI Command Interface")
+    root.geometry("900x600")
+    
+    command_listbox = Listbox(root, width=50, height=25)
+    command_listbox.pack(padx=10, pady=10, side=tk.LEFT)
+    
+    text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=50, height=25)
+    text_area.pack(padx=10, pady=10, side=tk.RIGHT)
+    
+    for command in command_library.keys():
+        command_listbox.insert(tk.END, command)
+    
+    def on_command_select(event):
+        selected_index = command_listbox.curselection()
+        if selected_index:
+            selected_command = command_listbox.get(selected_index)
+            text_area.config(state=tk.NORMAL)
+            text_area.delete("1.0", tk.END)
+            text_area.insert(tk.END, f"Command: {selected_command}\nDescription: {command_library[selected_command]}\n\n")
+            text_area.config(state=tk.DISABLED)
+    
+    def execute_selected_command():
+        selected_index = command_listbox.curselection()
+        if selected_index:
+            selected_command = command_listbox.get(selected_index)
+            execute_command(selected_command)
+    
+    command_listbox.bind("<<ListboxSelect>>", on_command_select)
+    
+    execute_button = Button(root, text="Execute Command", command=execute_selected_command)
+    execute_button.pack(pady=5)
+    
+    text_entry = Entry(root, width=50)
+    text_entry.pack(pady=5)
+    
+    def execute_custom_command():
+        custom_command = text_entry.get()
+        execute_command(custom_command)
+    
+    execute_text_button = Button(root, text="Execute Typed Command", command=execute_custom_command)
+    execute_text_button.pack(pady=5)
+    
+    root.mainloop()
+
+if __name__ == "__main__":
+    print("Displaying command execution interface...")
+    show_interface()
