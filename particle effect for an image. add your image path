@@ -1,0 +1,116 @@
+import pygame
+import numpy as np
+import random
+import sys
+import threading
+
+# Constants
+WIDTH, HEIGHT = 1200, 800
+PARTICLE_COUNT = 5000
+GRAVITY = 0.05
+WIND_FORCE = 0.02
+DECAY_RATE = 0.98
+
+# Initialize Pygame
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+
+# Load Image
+IMAGE_PATH = r""
+image = pygame.image.load(IMAGE_PATH)
+image = pygame.transform.scale(image, (WIDTH, HEIGHT))
+mask = pygame.mask.from_surface(image)
+mask_points = mask.outline()
+
+# Particle Class
+class Particle:
+    def __init__(self, x, y, layer=1):
+        self.x = x + random.uniform(-3, 3)
+        self.y = y + random.uniform(-3, 3)
+        self.vx = random.uniform(-1, 1) * layer
+        self.vy = random.uniform(-2, 0) * layer
+        self.alpha = 255
+        self.size = random.randint(2, 8) * layer
+        self.color = [random.randint(100, 255) for _ in range(3)]
+        self.layer = layer
+        self.children = []
+
+    def update(self):
+        self.vy += GRAVITY * self.layer
+        self.vx += WIND_FORCE * (random.uniform(-1, 1))
+        self.vx *= DECAY_RATE
+        self.vy *= DECAY_RATE
+        self.x += self.vx
+        self.y += self.vy
+        self.alpha -= random.randint(1, 5)
+        
+        if self.alpha < 0:
+            self.alpha = 0
+        
+        if self.alpha < 128 and len(self.children) == 0 and self.size > 2:
+            self.split()
+
+    def split(self):
+        for _ in range(random.randint(2, 4)):
+            self.children.append(Particle(self.x, self.y, self.layer // 2))
+
+    def draw(self, surface):
+        if self.alpha > 0:
+            particle_surface = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+            pygame.draw.circle(particle_surface, (*self.color, self.alpha), (self.size // 2, self.size // 2), self.size // 2)
+            surface.blit(particle_surface, (int(self.x), int(self.y)))
+        
+        for child in self.children:
+            child.draw(surface)
+
+# Particle System
+particles = []
+lock = threading.Lock()
+
+def recursive_spawn(px, py, depth=3):
+    if depth <= 0:
+        return
+    
+    new_particle = Particle(px, py, random.choice([1, 2, 3]))
+    with lock:
+        particles.append(new_particle)
+    
+    for _ in range(random.randint(2, 4)):
+        recursive_spawn(px + random.randint(-5, 5), py + random.randint(-5, 5), depth - 1)
+
+def spawn_particles():
+    while True:
+        with lock:
+            if len(particles) < PARTICLE_COUNT:
+                px, py = random.choice(mask_points)
+                recursive_spawn(px, py)
+
+# Start particle spawner in a separate thread
+particle_thread = threading.Thread(target=spawn_particles, daemon=True)
+particle_thread.start()
+
+# Main Loop
+running = True
+while running:
+    screen.fill((0, 0, 0))
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+    
+    # Update and Draw Particles
+    with lock:
+        for particle in particles[:]:
+            particle.update()
+            particle.draw(screen)
+            if particle.alpha == 0:
+                particles.remove(particle)
+    
+    # Display the original image
+    screen.blit(image, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
+sys.exit()
